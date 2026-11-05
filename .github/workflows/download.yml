@@ -1,0 +1,39 @@
+name: Download to Drive
+
+on:
+  workflow_dispatch:
+    inputs:
+      link:
+        description: "Link (http/https) or magnet"
+        required: true
+      folder:
+        description: "Folder in Google Drive"
+        required: true
+        default: "Downloads"
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y aria2 rclone
+
+      - name: Write rclone config
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          mkdir -p ~/.config/rclone
+          printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+
+      - name: Download and upload to Drive
+        env:
+          LINK: ${{ github.event.inputs.link }}
+          FOLDER: ${{ github.event.inputs.folder }}
+        run: |
+          set -e
+          mkdir -p dl
+          aria2c -x 8 -s 8 -k 1M --seed-time=0 --file-allocation=none \
+            --summary-interval=30 -d dl -- "$LINK"
+          rclone move dl "mydrive:$FOLDER" --delete-empty-src-dirs --progress
+          echo "Done."
